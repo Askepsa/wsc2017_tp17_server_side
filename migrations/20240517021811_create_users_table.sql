@@ -1,4 +1,7 @@
+CREATE TYPE role as ENUM('ADMIN', 'USER');
+
 CREATE TABLE users (
-  username VARCHAR(128),
+  role role NOT NULL,
+  username VARCHAR(128) PRIMARY KEY,
   password VARCHAR(256)
 );
