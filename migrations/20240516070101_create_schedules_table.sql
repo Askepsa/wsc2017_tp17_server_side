@@ -2,7 +2,7 @@ CREATE TYPE vehicle as ENUM('TRAIN', 'BUS');
 CREATE TYPE availability_status as ENUM('AVAILABLE', 'UNAVAILABLE');
 
 CREATE TABLE schedules (
-  id INT NOT NULL,
+  id SERIAL PRIMARY KEY,
   line INT NOT NULL,
   from_place_id INT NOT NULL,
   to_place_id INT NOT NULL,

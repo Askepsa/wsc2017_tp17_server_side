@@ -1,7 +1,7 @@
 CREATE TYPE place_category as ENUM('Attraction', 'Restaurant');
 
 CREATE TABLE places (
-  id INT NOT NULL,
+  id SERIAL PRIMARY KEY,
   name VARCHAR(100) DEFAULT NULL,
   latitude FLOAT DEFAULT NULL,
   longitude FLOAT DEFAULT NULL,
