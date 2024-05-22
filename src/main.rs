@@ -3,8 +3,8 @@ use actix_web::{
     App, HttpResponse, HttpServer, Responder,
 };
 use sqlx::postgres::PgPoolOptions;
-use wsc2017_tp17::database::DatabasePool;
 use wsc2017_tp17::routes::auth::login;
+use wsc2017_tp17::{database::DatabasePool, routes::auth::logout};
 
 async fn root() -> impl Responder {
     HttpResponse::Ok()
@@ -24,8 +24,11 @@ async fn main() -> std::io::Result<()> {
             .app_data(db_pool.clone())
             .route("/yep", web::post().to(root))
             .service(
-                web::scope("/v1")
-                    .service(web::scope("/auth").route("/login", web::post().to(login))),
+                web::scope("/v1").service(
+                    web::scope("/auth")
+                        .route("/login", web::post().to(login))
+                        .route("/logout", web::get().to(logout)),
+                ),
             )
     })
     .bind(("127.0.0.1", 8080))?
