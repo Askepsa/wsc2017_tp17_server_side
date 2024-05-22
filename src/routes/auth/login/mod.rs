@@ -1,15 +1,9 @@
-use crate::database::DatabasePool;
 use actix_web::{web, HttpResponse, Responder};
 use rand::{distributions::Alphanumeric, Rng};
 use serde::{Deserialize, Serialize};
 use sqlx::{Error, Pool, Postgres};
 
-#[derive(sqlx::Type, Debug, Clone, Copy, Deserialize, Serialize)]
-#[sqlx(type_name = "role")]
-enum Role {
-    USER,
-    ADMIN,
-}
+use crate::types::{DatabasePool, ErrRes, OkRes, Role};
 
 #[derive(Serialize)]
 pub struct UserCreds {
@@ -27,17 +21,6 @@ pub struct Session {
 pub struct UserRequest {
     username: String,
     password: String,
-}
-
-#[derive(Serialize)]
-struct OkRes {
-    token: String,
-    role: Role,
-}
-
-#[derive(Serialize)]
-struct ErrRes {
-    msg: String,
 }
 
 pub async fn login(

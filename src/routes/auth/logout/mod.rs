@@ -2,7 +2,7 @@ use actix_web::{web, HttpResponse, Responder};
 use serde::{Deserialize, Serialize};
 use sqlx::{Error, Pool, Postgres};
 
-use crate::database::DatabasePool;
+use crate::types::DatabasePool;
 
 #[derive(Deserialize)]
 pub struct URLSearchParams {

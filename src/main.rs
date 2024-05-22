@@ -3,8 +3,10 @@ use actix_web::{
     App, HttpResponse, HttpServer, Responder,
 };
 use sqlx::postgres::PgPoolOptions;
-use wsc2017_tp17::routes::auth::login;
-use wsc2017_tp17::{database::DatabasePool, routes::auth::logout};
+use wsc2017_tp17::{
+    routes::auth::{login, logout},
+    types::DatabasePool,
+};
 
 async fn root() -> impl Responder {
     HttpResponse::Ok()
