@@ -1,6 +1,6 @@
 use crate::database::DatabasePool;
 use actix_web::{web, HttpResponse, Responder};
-use jsonwebtoken::{self, encode, EncodingKey, Header};
+use rand::{distributions::Alphanumeric, Rng};
 use serde::{Deserialize, Serialize};
 
 pub async fn login(
@@ -25,6 +25,12 @@ pub async fn login(
     .fetch_one(&db_pool.pool)
     .await;
 
+    let token: String = rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(100)
+        .map(char::from)
+        .collect();
+
     let (username, role) = match &query_res {
         Ok(res) => (res.username.clone(), res.role.clone()),
         _ => {
@@ -34,37 +40,23 @@ pub async fn login(
         }
     };
 
-    let claim = Claim {
-        username,
-        role,
-        exp: 10000000000, // di ko alam kung relative ba to o absolute
-    };
+    let query = sqlx::query_as!(
+        Session,
+        "INSERT INTO sessions VALUES ($1, $2)",
+        token.clone(),
+        username
+    )
+    .execute(&db_pool.pool)
+    .await;
 
-    let token = match encode(
-        &Header::default(),
-        &claim,
-        &EncodingKey::from_secret(JW_TOKEN_KEY.as_ref()),
-    ) {
-        Ok(token) => token,
-        _ => {
-            return HttpResponse::InternalServerError().json(ErrRes {
-                msg: "jwt boom".into(),
-            })
-        }
-    };
+    if let Err(_) = query {
+        return HttpResponse::InternalServerError().json(ErrRes {
+            msg: "database boom".into(),
+        });
+    }
 
     return HttpResponse::Ok().json(OkRes { token, role });
 }
-
-const JW_TOKEN_KEY: &'static str = "averysafekey";
-
-#[derive(Deserialize, Serialize)]
-struct Claim {
-    username: String,
-    role: Role,
-    exp: usize,
-}
-
 #[derive(sqlx::Type, Debug, Clone, Copy, Deserialize, Serialize)]
 #[sqlx(type_name = "role")]
 enum Role {
@@ -76,6 +68,12 @@ enum Role {
 pub struct UserCreds {
     username: String,
     role: Role,
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct Session {
+    token: String,
+    username: String,
 }
 
 #[derive(Deserialize)]
