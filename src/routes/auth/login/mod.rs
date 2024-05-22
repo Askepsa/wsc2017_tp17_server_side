@@ -11,13 +11,13 @@ enum Role {
     ADMIN,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Serialize)]
 pub struct UserCreds {
     username: String,
     role: Role,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Serialize)]
 pub struct Session {
     token: String,
     username: String,
@@ -35,7 +35,7 @@ struct OkRes {
     role: Role,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Serialize)]
 struct ErrRes {
     msg: String,
 }
@@ -44,13 +44,12 @@ pub async fn login(
     request: Option<web::Json<UserRequest>>,
     db_pool: web::Data<DatabasePool>,
 ) -> impl Responder {
-    let (username, password) = match get_request(&request) {
-        Some((username, password)) => (username, password),
-        _ => {
-            return HttpResponse::BadRequest().json(ErrRes {
-                msg: "invalid login".into(),
-            })
-        }
+    let (username, password) = if let Some(val) = &request {
+        (val.username.clone(), val.password.clone())
+    } else {
+        return HttpResponse::BadRequest().json(ErrRes {
+            msg: "invalid login".into(),
+        });
     };
 
     let query_res = get_user_creds(&username, &password, &db_pool.pool).await;
@@ -76,14 +75,6 @@ pub async fn login(
     }
 
     return HttpResponse::Ok().json(OkRes { token, role });
-}
-
-fn get_request(request: &Option<web::Json<UserRequest>>) -> Option<(String, String)> {
-    if let Some(val) = request {
-        return Some((val.username.clone(), val.password.clone()));
-    }
-
-    None
 }
 
 async fn get_user_creds(
