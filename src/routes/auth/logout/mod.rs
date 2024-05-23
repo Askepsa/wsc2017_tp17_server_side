@@ -1,22 +1,12 @@
 use actix_web::{web, HttpResponse, Responder};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use sqlx::{Error, Pool, Postgres};
 
-use crate::types::DatabasePool;
+use crate::types::{DatabasePool, ErrMsg, OkMsg};
 
 #[derive(Deserialize)]
 pub struct URLSearchParams {
     token: String,
-}
-
-#[derive(Deserialize, Serialize)]
-struct ErrMsg {
-    msg: String,
-}
-
-#[derive(Deserialize, Serialize)]
-struct OkMsg {
-    msg: String,
 }
 
 pub async fn logout(
@@ -30,7 +20,8 @@ pub async fn logout(
     };
 
     if let Err(_) = perform_session_deletion(token, &db_pool.pool).await {
-        return HttpResponse::BadRequest().json(ErrMsg { msg: "yep".into() });
+        let json = HttpResponse::BadRequest().json(ErrMsg { msg: "yep".into() });
+        return json;
     }
 
     HttpResponse::Ok().json(OkMsg {

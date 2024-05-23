@@ -3,18 +3,24 @@ use rand::{distributions::Alphanumeric, Rng};
 use serde::{Deserialize, Serialize};
 use sqlx::{Error, Pool, Postgres};
 
-use crate::types::{DatabasePool, ErrRes, OkRes, Role};
+use crate::types::{DatabasePool, Role};
+
+#[derive(Serialize)]
+pub struct OkRes {
+    pub token: String,
+    pub role: Role,
+}
+
+#[derive(Serialize)]
+pub struct ErrRes {
+    pub msg: String,
+}
+
 
 #[derive(Serialize)]
 pub struct UserCreds {
     username: String,
     role: Role,
-}
-
-#[derive(Serialize)]
-pub struct Session {
-    token: String,
-    username: String,
 }
 
 #[derive(Deserialize)]

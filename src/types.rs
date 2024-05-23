@@ -8,14 +8,13 @@ pub enum Role {
     ADMIN,
 }
 
-#[derive(Serialize)]
-pub struct OkRes {
-    pub token: String,
-    pub role: Role,
+#[derive(Deserialize, Serialize)]
+pub struct ErrMsg {
+    pub msg: String,
 }
 
-#[derive(Serialize)]
-pub struct ErrRes {
+#[derive(Deserialize, Serialize)]
+pub struct OkMsg {
     pub msg: String,
 }
 
@@ -23,3 +22,9 @@ pub struct DatabasePool {
     pub pool: PgPool,
 }
 
+
+#[derive(Serialize)]
+pub struct Session {
+    pub token: String,
+    pub username: String,
+}
