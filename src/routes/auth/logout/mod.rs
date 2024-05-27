@@ -19,9 +19,8 @@ pub async fn logout(
         return HttpResponse::BadRequest().json(ErrMsg { msg: "yep".into() });
     };
 
-    if let Err(_) = perform_session_deletion(token, &db_pool.pool).await {
-        let json = HttpResponse::BadRequest().json(ErrMsg { msg: "yep".into() });
-        return json;
+    if (perform_session_deletion(token, &db_pool.pool).await).is_err() {
+        return HttpResponse::BadRequest().json(ErrMsg { msg: "yep".into() });
     }
 
     HttpResponse::Ok().json(OkMsg {

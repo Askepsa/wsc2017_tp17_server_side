@@ -42,7 +42,7 @@ pub async fn login(
 
     let query_res = get_user_creds(&username, &password, &db_pool.pool).await;
     let (username, role) = match &query_res {
-        Ok(res) => (res.username.clone(), res.role.clone()),
+        Ok(res) => (res.username.clone(), res.role),
         _ => {
             return HttpResponse::InternalServerError().json(ErrRes {
                 msg: "database boom".into(),
@@ -56,13 +56,13 @@ pub async fn login(
         .map(char::from)
         .collect();
 
-    if let Err(_) = insert_into_session(&token, &username, &db_pool.pool).await {
+    if (insert_into_session(&token, &username, &db_pool.pool).await).is_err() {
         return HttpResponse::InternalServerError().json(ErrRes {
             msg: "database boom".into(),
         });
     }
 
-    return HttpResponse::Ok().json(OkRes { token, role });
+    HttpResponse::Ok().json(OkRes { token, role })
 }
 
 async fn get_user_creds(

@@ -2,14 +2,11 @@ use crate::{
     routes::auth::{login, logout},
     types::DatabasePool,
 };
-
 use actix_web::{
     web::{self, Data, ServiceConfig},
     HttpResponse,
 };
-
 use sqlx::postgres::PgPoolOptions;
-
 use std::{collections::HashMap, fs, io};
 
 #[derive(Clone)]
@@ -22,7 +19,6 @@ impl ServerConfig {
     pub async fn new() -> Self {
         let env = read_env().expect("Reading of env failed");
         let db_url = env.get("DATABASE_URL").expect("env not found");
-
         let db_pool: Data<DatabasePool> = web::Data::new(DatabasePool {
             pool: PgPoolOptions::new()
                 .connect(db_url)
