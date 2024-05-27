@@ -22,7 +22,6 @@ pub struct DatabasePool {
     pub pool: PgPool,
 }
 
-
 #[derive(Serialize)]
 pub struct Session {
     pub token: String,

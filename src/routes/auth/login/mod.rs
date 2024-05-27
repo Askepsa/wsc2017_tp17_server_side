@@ -16,7 +16,6 @@ pub struct ErrRes {
     pub msg: String,
 }
 
-
 #[derive(Serialize)]
 pub struct UserCreds {
     username: String,
