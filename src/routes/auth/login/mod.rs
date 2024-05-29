@@ -45,7 +45,9 @@ pub async fn login(
         Ok(res) => (res.username.clone(), res.role),
         Err(err) => match *err {
             sqlx::Error::RowNotFound => {
-                return HttpResponse::BadRequest().json(ErrRes { msg: "invalid login".into() })
+                return HttpResponse::BadRequest().json(ErrRes {
+                    msg: "invalid login".into(),
+                })
             }
             _ => {
                 return HttpResponse::InternalServerError().json(ErrRes {
