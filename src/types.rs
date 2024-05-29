@@ -8,13 +8,8 @@ pub enum Role {
     ADMIN,
 }
 
-#[derive(Deserialize, Serialize)]
-pub struct ErrMsg {
-    pub msg: String,
-}
-
-#[derive(Deserialize, Serialize)]
-pub struct OkMsg {
+#[derive(Debug, Deserialize, Serialize)]
+pub struct Res {
     pub msg: String,
 }
 

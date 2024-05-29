@@ -5,7 +5,7 @@ use sqlx::{Error, Pool, Postgres};
 
 use crate::types::{DatabasePool, Role};
 
-#[derive(Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct OkRes {
     pub token: String,
     pub role: Role,
@@ -43,11 +43,16 @@ pub async fn login(
     let query_res = get_user_creds(&username, &password, &db_pool.pool).await;
     let (username, role) = match &query_res {
         Ok(res) => (res.username.clone(), res.role),
-        _ => {
-            return HttpResponse::InternalServerError().json(ErrRes {
-                msg: "database boom".into(),
-            })
-        }
+        Err(err) => match *err {
+            sqlx::Error::RowNotFound => {
+                return HttpResponse::BadRequest().json(ErrRes { msg: "invalid login".into() })
+            }
+            _ => {
+                return HttpResponse::InternalServerError().json(ErrRes {
+                    msg: "database boom".into(),
+                })
+            }
+        },
     };
 
     let token: String = rand::thread_rng()
