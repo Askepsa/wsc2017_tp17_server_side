@@ -33,9 +33,11 @@ impl ServerConfig {
         cfg.app_data(self.db_pool.clone());
         cfg.route("/", web::get().to(|| HttpResponse::Ok()));
         cfg.service(
-            web::scope("/v1")
-                .service(web::scope("/auth").route("/login", web::post().to(login)))
-                .route("/logout", web::get().to(logout)),
+            web::scope("/v1").service(
+                web::scope("/auth")
+                    .route("/login", web::post().to(login))
+                    .route("/logout", web::get().to(logout)),
+            ),
         );
     }
 }
