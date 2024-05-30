@@ -20,7 +20,6 @@ async fn getting_all_places_returns_valid_response_for_valid_request() {
     let req = test::TestRequest::get()
         .uri(&format!("/v1/place?{}", search_params))
         .to_request();
-
     let res: Vec<Place> = test::call_and_read_body_json(&app, req).await;
     let places = sqlx::query_as!(
         Place,

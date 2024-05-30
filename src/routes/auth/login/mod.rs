@@ -3,7 +3,7 @@ use rand::{distributions::Alphanumeric, Rng};
 use serde::{Deserialize, Serialize};
 use sqlx::{Error, Pool, Postgres};
 
-use crate::types::{DatabasePool, Role};
+use crate::routes::{DatabasePool, Role};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct OkRes {

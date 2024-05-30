@@ -1,7 +1,7 @@
 use crate::routes::place::{Place, Places};
 use crate::{
     routes::auth::SessionToken,
-    types::{DatabasePool, Res},
+    routes::{DatabasePool, Res},
 };
 use actix_web::{web, HttpResponse, Responder};
 use sqlx::{Pool, Postgres};

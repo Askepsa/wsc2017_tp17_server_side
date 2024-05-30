@@ -2,7 +2,7 @@ use crate::routes::auth::SessionToken;
 use actix_web::{web, HttpResponse, Responder};
 use sqlx::{Error, Pool, Postgres};
 
-use crate::types::{DatabasePool, Res};
+use crate::routes::{DatabasePool, Res};
 
 pub async fn logout(
     uri_req: Option<web::Query<SessionToken>>,
