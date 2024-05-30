@@ -1,20 +1,15 @@
+use crate::routes::auth::SessionToken;
 use actix_web::{web, HttpResponse, Responder};
-use serde::Deserialize;
 use sqlx::{Error, Pool, Postgres};
 
 use crate::types::{DatabasePool, Res};
 
-#[derive(Deserialize)]
-pub struct URLSearchParams {
-    token: String,
-}
-
 pub async fn logout(
-    uri_req: Option<web::Query<URLSearchParams>>,
+    uri_req: Option<web::Query<SessionToken>>,
     db_pool: web::Data<DatabasePool>,
 ) -> impl Responder {
     let token = if let Some(req) = uri_req {
-        req.token.clone()
+        req.token.to_string()
     } else {
         return HttpResponse::BadRequest().json(Res {
             msg: "invalid request".into(),
@@ -31,7 +26,6 @@ pub async fn logout(
 }
 
 async fn perform_session_deletion(token: String, db_pool: &Pool<Postgres>) -> Result<(), Error> {
-    println!("{}", token);
     let _ = sqlx::query!("DELETE from sessions where token = $1", token)
         .execute(db_pool)
         .await?;

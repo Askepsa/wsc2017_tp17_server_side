@@ -76,7 +76,7 @@ async fn logout_returns_200_for_valid_request() {
     let db_pool = server_config.db_pool.pool.clone();
     let app = test::init_service(App::new().configure(move |cfg| server_config.config(cfg))).await;
 
-    let token = get_token(db_pool).await;
+    let token = get_session_token(db_pool).await;
     let url_params = format!(r#"token={}"#, token);
     let req = test::TestRequest::get()
         .uri(&format!("/v1/auth/logout?{}", url_params))
@@ -96,7 +96,7 @@ async fn logout_returns_400_for_invalid_request() {
     let db_pool = server_config.db_pool.pool.clone();
     let app = test::init_service(App::new().configure(move |cfg| server_config.config(cfg))).await;
 
-    let token = get_token(db_pool).await;
+    let token = get_session_token(db_pool).await;
     let url_params = format!(r#""token": "{}""#, token);
     let req = test::TestRequest::post()
         .uri("/v1/auth/logout")
@@ -116,7 +116,7 @@ async fn logout_returns_400_for_invalid_request() {
     );
 }
 
-async fn get_token(db_pool: Pool<Postgres>) -> String {
+pub async fn get_session_token(db_pool: Pool<Postgres>) -> String {
     sqlx::query!("SELECT TOKEN FROM sessions LIMIT 1;")
         .fetch_one(&db_pool)
         .await
