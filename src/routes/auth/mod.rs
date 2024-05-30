@@ -8,5 +8,5 @@ use serde::Deserialize;
 
 #[derive(Deserialize)]
 pub struct SessionToken {
-    token: String,
+    pub token: String,
 }

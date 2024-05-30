@@ -1,5 +1,8 @@
 use crate::{
-    routes::auth::{login, logout},
+    routes::{
+        auth::{login, logout},
+        place::get::get_places,
+    },
     types::DatabasePool,
 };
 use actix_web::{
@@ -31,14 +34,16 @@ impl ServerConfig {
 
     pub fn config(&self, cfg: &mut ServiceConfig) {
         cfg.app_data(self.db_pool.clone());
-        cfg.route("/", web::get().to(|| HttpResponse::Ok()));
-        cfg.service(
-            web::scope("/v1").service(
-                web::scope("/auth")
-                    .route("/login", web::post().to(login))
-                    .route("/logout", web::get().to(logout)),
-            ),
-        );
+        cfg.route("/", web::get().to(|| HttpResponse::Ok()))
+            .service(
+                web::scope("/v1")
+                    .service(
+                        web::scope("/auth")
+                            .route("/login", web::post().to(login))
+                            .route("/logout", web::get().to(logout)),
+                    )
+                    .route("/place", web::get().to(get_places)),
+            );
     }
 }
 
