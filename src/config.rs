@@ -11,7 +11,7 @@ use std::{collections::HashMap, fs, io};
 
 #[derive(Clone)]
 pub struct ServerConfig {
-    db_pool: Data<DatabasePool>,
+    pub db_pool: Data<DatabasePool>,
     pub env: HashMap<String, String>,
 }
 
