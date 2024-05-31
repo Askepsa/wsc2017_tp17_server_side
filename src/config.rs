@@ -47,7 +47,6 @@ impl ServerConfig {
 
 fn read_env() -> Result<HashMap<String, String>, io::Error> {
     let buf = fs::read_to_string(".env")?;
-
     let vec: Vec<&str> = buf.as_str().split('\n').collect();
     let hash_map: HashMap<String, String> = vec
         .into_iter()
