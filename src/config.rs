@@ -1,9 +1,7 @@
-use crate::{
-    routes::{
-        auth::{login, logout},
-        place::get::get_places,
-        DatabasePool
-    },
+use crate::routes::{
+    auth::{login, logout},
+    place::get::get_places,
+    DatabasePool,
 };
 use actix_web::{
     web::{self, Data, ServiceConfig},

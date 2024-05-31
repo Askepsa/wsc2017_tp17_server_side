@@ -2,10 +2,7 @@ mod auth;
 
 use actix_web::test;
 use auth::get_session_token;
-use wsc2017_tp17::{
-    config::ServerConfig,
-    routes::place::Place
-};
+use wsc2017_tp17::{config::ServerConfig, routes::place::Place};
 
 #[actix_web::test]
 async fn getting_all_places_returns_valid_response_for_valid_request() {
