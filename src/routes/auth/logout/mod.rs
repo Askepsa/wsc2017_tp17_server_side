@@ -5,16 +5,10 @@ use sqlx::{Error, Pool, Postgres};
 use crate::routes::{DatabasePool, Res};
 
 pub async fn logout(
-    uri_req: Option<web::Query<SessionToken>>,
+    uri_req: web::Query<SessionToken>,
     db_pool: web::Data<DatabasePool>,
 ) -> impl Responder {
-    let token = if let Some(req) = uri_req {
-        req.token.to_string()
-    } else {
-        return HttpResponse::BadRequest().json(Res {
-            msg: "invalid request".into(),
-        });
-    };
+    let token = uri_req.token.to_owned();
 
     if (perform_session_deletion(token, &db_pool.pool).await).is_err() {
         return HttpResponse::InternalServerError().json(Res { msg: "yep".into() });

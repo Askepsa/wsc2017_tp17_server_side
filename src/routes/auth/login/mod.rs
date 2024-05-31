@@ -29,17 +29,10 @@ pub struct UserRequest {
 }
 
 pub async fn login(
-    request: Option<web::Json<UserRequest>>,
+    request: web::Json<UserRequest>,
     db_pool: web::Data<DatabasePool>,
 ) -> impl Responder {
-    let (username, password) = if let Some(val) = &request {
-        (val.username.clone(), val.password.clone())
-    } else {
-        return HttpResponse::BadRequest().json(ErrRes {
-            msg: "invalid login".into(),
-        });
-    };
-
+    let (username, password) = (request.username.to_owned(), request.password.to_owned());
     let query_res = get_user_creds(&username, &password, &db_pool.pool).await;
     let (username, role) = match &query_res {
         Ok(res) => (res.username.clone(), res.role),

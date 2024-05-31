@@ -7,16 +7,10 @@ use actix_web::{web, HttpResponse, Responder};
 use sqlx::{Pool, Postgres};
 
 pub async fn get_places(
-    req: Option<web::Query<SessionToken>>,
+    req: web::Query<SessionToken>,
     db_pool: web::Data<DatabasePool>,
 ) -> impl Responder {
-    let token = if let Some(req) = req {
-        req.token.clone()
-    } else {
-        return HttpResponse::BadRequest().json(Res {
-            msg: "Unauthorized user".to_owned(),
-        });
-    };
+    let token = req.token.to_owned();
 
     if validate_token(&token, db_pool.clone().pool.clone())
         .await
