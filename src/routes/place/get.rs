@@ -13,7 +13,7 @@ pub async fn get_places(
     let token = req.token.to_owned();
 
     match validate_token(&token, db_pool.clone().pool.clone()).await {
-        Err(sqlx::Error::RowNotFound) => HttpResponse::BadRequest().json(Res {
+        Err(sqlx::Error::RowNotFound) => HttpResponse::Unauthorized().json(Res {
             msg: "unauthorized".to_owned(),
         }),
         _ => HttpResponse::InternalServerError().json(Res {
