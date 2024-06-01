@@ -1,5 +1,5 @@
+use super::Slug;
 use actix_web::{web, HttpResponse, Responder};
-use serde::Deserialize;
 use sqlx::{error, Pool, Postgres};
 
 use crate::routes::{
@@ -7,11 +7,6 @@ use crate::routes::{
     place::Place,
     DatabasePool, Res,
 };
-
-#[derive(Deserialize)]
-pub struct Slug {
-    id: i32,
-}
 
 pub async fn find_place(
     slug: web::Path<Slug>,

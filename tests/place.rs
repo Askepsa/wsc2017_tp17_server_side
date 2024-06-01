@@ -145,6 +145,11 @@ async fn finding_place_returns_400_for_invalid_request() {
     }
 }
 
+// TODO:
+// CREATE Test
+// UPDATE Test
+// DELETE Test
+
 #[derive(Debug, serde::Deserialize)]
 struct PlaceIdSearchParams {
     pub id: i32,
