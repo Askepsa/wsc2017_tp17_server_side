@@ -7,4 +7,3 @@ pub mod get;
 pub struct Slug {
     id: i32,
 }
-

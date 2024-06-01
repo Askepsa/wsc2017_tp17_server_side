@@ -1,6 +1,9 @@
 use crate::routes::{
     auth::{login, logout},
-    place::{get::get_places, slug::get::find_place},
+    place::{
+        get::get_places,
+        slug::{delete::delete_place, get::find_place},
+    },
     DatabasePool,
 };
 use actix_web::{
@@ -40,7 +43,11 @@ impl ServerConfig {
                             .route("/login", web::post().to(login))
                             .route("/logout", web::get().to(logout)),
                     )
-                    .service(web::resource("/place/{id}").get(find_place))
+                    .service(
+                        web::resource("/place/{id}")
+                            .get(find_place)
+                            .delete(delete_place),
+                    )
                     .route("/place", web::get().to(get_places)),
             );
     }

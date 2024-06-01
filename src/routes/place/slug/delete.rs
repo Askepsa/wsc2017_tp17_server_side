@@ -6,7 +6,7 @@ use actix_web::{web, HttpResponse, Responder};
 
 use super::Slug;
 
-async fn delete_place(
+pub async fn delete_place(
     slug: web::Path<Slug>,
     search_param: web::Query<SessionToken>,
     db_pool: web::Data<DatabasePool>,
