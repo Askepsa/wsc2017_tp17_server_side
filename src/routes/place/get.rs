@@ -12,14 +12,14 @@ pub async fn get_places(
 ) -> impl Responder {
     let token = req.token.to_owned();
 
-    if validate_token(&token, db_pool.clone().pool.clone())
-        .await
-        .is_err()
-    {
-        return HttpResponse::InternalServerError().json(Res {
+    match validate_token(&token, db_pool.clone().pool.clone()).await {
+        Err(sqlx::Error::RowNotFound) => HttpResponse::BadRequest().json(Res {
+            msg: "unauthorized".to_owned(),
+        }),
+        _ => HttpResponse::InternalServerError().json(Res {
             msg: "server err".to_owned(),
-        });
-    }
+        }),
+    };
 
     match query_places(db_pool.pool.clone()).await {
         Ok(places) => HttpResponse::Ok().json(places),

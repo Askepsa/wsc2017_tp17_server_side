@@ -1,8 +1,9 @@
 pub mod get;
+pub mod slug;
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Deserialize, PartialEq, Serialize)]
 pub struct Place {
     pub id: i32,
     pub name: Option<String>,
