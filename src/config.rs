@@ -4,6 +4,7 @@ use crate::routes::{
         get::get_places,
         slug::{delete::delete_place, get::find_place},
     },
+    route::search::get_shortest_paths,
     DatabasePool,
 };
 use actix_web::{
@@ -48,7 +49,13 @@ impl ServerConfig {
                             .get(find_place)
                             .delete(delete_place),
                     )
-                    .route("/place", web::get().to(get_places)),
+                    .route("/place", web::get().to(get_places))
+                    .service(
+                        web::scope("/route").service(
+                            web::resource("/search/{from_place_id}/{to_place_id}/{departure_time}")
+                                .get(get_shortest_paths),
+                        ),
+                    ),
             );
     }
 }

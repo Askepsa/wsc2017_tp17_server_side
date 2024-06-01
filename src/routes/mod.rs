@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod place;
+pub mod route;
 
 use serde::{Deserialize, Serialize};
 use sqlx::postgres::PgPool;
