@@ -2,7 +2,11 @@ use actix_web::{web, HttpResponse, Responder};
 use serde::Deserialize;
 use sqlx::{error, Pool, Postgres};
 
-use crate::routes::{auth::SessionToken, place::Place, DatabasePool, Res};
+use crate::routes::{
+    auth::{validate_session_token, SessionToken},
+    place::Place,
+    DatabasePool, Res,
+};
 
 #[derive(Deserialize)]
 pub struct Slug {
@@ -48,20 +52,6 @@ pub async fn find_place(
     }
 
     HttpResponse::Ok().json(place)
-}
-
-async fn validate_session_token(
-    session_token: &str,
-    db_pool: &Pool<Postgres>,
-) -> Result<(), sqlx::Error> {
-    let query = sqlx::query!("SELECT token FROM sessions WHERE token = $1", session_token)
-        .fetch_one(db_pool)
-        .await;
-
-    match query {
-        Ok(_) => Ok(()),
-        Err(err) => Err(err),
-    }
 }
 
 async fn get_place_by_id(place_id: i32, db_pool: &Pool<Postgres>) -> Result<Place, sqlx::Error> {

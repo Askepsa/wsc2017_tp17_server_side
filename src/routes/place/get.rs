@@ -1,3 +1,4 @@
+use crate::routes::auth::validate_session_token;
 use crate::routes::place::{Place, Places};
 use crate::{
     routes::auth::SessionToken,
@@ -12,7 +13,7 @@ pub async fn get_places(
 ) -> impl Responder {
     let token = req.token.to_owned();
 
-    match validate_token(&token, db_pool.clone().pool.clone()).await {
+    match validate_session_token(&token, &db_pool.pool).await {
         Err(sqlx::Error::RowNotFound) => HttpResponse::Unauthorized().json(Res {
             msg: "unauthorized".to_owned(),
         }),
@@ -26,17 +27,6 @@ pub async fn get_places(
         Err(_) => HttpResponse::InternalServerError().json(Res {
             msg: "server err".to_owned(),
         }),
-    }
-}
-
-async fn validate_token(token: &str, db_pool: Pool<Postgres>) -> Result<(), sqlx::Error> {
-    let query = sqlx::query!("SELECT token FROM sessions WHERE token = $1", token)
-        .fetch_one(&db_pool)
-        .await;
-
-    match query {
-        Ok(_) => Ok(()),
-        Err(err) => Err(err),
     }
 }
 
