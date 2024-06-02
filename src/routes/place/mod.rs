@@ -12,6 +12,7 @@ pub struct Place {
     pub x: Option<i32>,
     pub y: Option<i32>,
     pub image_path: Option<String>,
+    pub description: Option<String>,
 }
 
 #[derive(Deserialize, Serialize)]

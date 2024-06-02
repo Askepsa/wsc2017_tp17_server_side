@@ -24,7 +24,7 @@ async fn getting_all_places_returns_valid_response_for_valid_request() {
     let res: Vec<Place> = test::call_and_read_body_json(&app, req).await;
     let places = sqlx::query_as!(
         Place,
-        r#"SELECT id, name, latitude, longitude, x, y, image_path FROM places"#
+        r#"SELECT id, name, latitude, longitude, x, y, image_path, description FROM places"#
     )
     .fetch_all(&db_pool)
     .await

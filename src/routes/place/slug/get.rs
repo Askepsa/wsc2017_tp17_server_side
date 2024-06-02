@@ -49,10 +49,13 @@ pub async fn find_place(
     HttpResponse::Ok().json(place)
 }
 
-async fn get_place_by_id(place_id: i32, db_pool: &Pool<Postgres>) -> Result<Place, sqlx::Error> {
+pub async fn get_place_by_id(
+    place_id: i32,
+    db_pool: &Pool<Postgres>,
+) -> Result<Place, sqlx::Error> {
     let query = sqlx::query_as!(
         Place,
-        "SELECT id, name, latitude, longitude, x, y, image_path FROM places where id = $1",
+        "SELECT id, name, latitude, longitude, x, y, image_path, description FROM places where id = $1",
         place_id
     )
     .fetch_one(db_pool)

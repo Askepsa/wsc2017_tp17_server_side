@@ -33,7 +33,7 @@ pub async fn get_places(
 async fn query_places(db_pool: Pool<Postgres>) -> Result<Places, sqlx::Error> {
     let query = sqlx::query_as!(
         Place,
-        "SELECT id, name, latitude, longitude, x, y, image_path FROM places"
+        "SELECT id, name, latitude, longitude, x, y, image_path, description FROM places"
     )
     .fetch_all(&db_pool)
     .await;
