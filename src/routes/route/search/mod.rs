@@ -12,6 +12,8 @@ use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Postgres};
 use std::str::FromStr;
 
+pub mod graph;
+
 pub async fn shortest_paths(
     slug: web::Path<Slug>,
     query: web::Query<SessionToken>,
