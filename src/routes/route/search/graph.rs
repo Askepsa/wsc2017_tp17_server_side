@@ -1,4 +1,4 @@
-use actix_web::web;
+use actix_web::web::{self, BufMut};
 use chrono::NaiveTime;
 use sqlx::{query, query_as, PgPool};
 use std::borrow::Borrow;
@@ -75,40 +75,56 @@ impl Graph {
 
         // Fill edges of nodes
         // Get edges of node id
-        let mut node_edges_id = HashMap::new();
-        for (k, node) in nodes.iter() {
+        let mut node_edges_id: HashMap<usize, Vec<i32>> = HashMap::new();
+        for (id, node) in nodes.iter() {
             // query appropriate time
             // fill node according to appropriate schedule id
             let departure_time = &(*(*node)).departure_time;
-            let candidate_edges = query!(
-                "SELECT id, from_place_id, to_place_id 
-                 FROM schedules
-                 WHERE (from_place_id = $1 OR to_place_id = $2)
-                 AND departure_time >= $3;",
+            let edge_candidate_stations_id = query!(
+                "SELECT id, to_place_id 
+                 FROM schedules 
+                 WHERE from_place_id = $1 
+                 AND departure_time >= $2;",
                 (*(*node)).from_place_id as i32,
-                (*(*node)).to_place_id as i32,
                 NaiveTime::from_str(departure_time).expect(&format!(
                     "Sumabog ang conversion ng oras {}",
                     (*(*node)).departure_time
                 ))
             )
             .fetch_all(&db_pool)
-            .await?;
+            .await?
+            .iter()
+            .map(|rec| (rec.id, rec.to_place_id))
+            .collect::<Vec<(i32, i32)>>();
 
-            // find edges of the current id
-            let mut edges = Vec::new();
-            for (indx, edge) in candidate_edges.iter().enumerate() {
-                if let Some(next_edge) = candidate_edges.get(indx + 1) {
-                    if edge.to_place_id == next_edge.from_place_id {
-                        edges.push(next_edge.id);
-                    }
-                }
+            let mut kandydate = Vec::new();
+            for (sched_origin_id, edge_to_place_id) in edge_candidate_stations_id {
+                let mut query: Vec<i32> = query!(
+                    "SELECT id from schedules 
+                     WHERE id = $1 AND from_place_id = $2 AND departure_time >= $3;",
+                    sched_origin_id + 1,
+                    edge_to_place_id,
+                    NaiveTime::from_str(departure_time).expect(&format!(
+                        "Sumabog ang conversion ng oras {}",
+                        (*(*node)).departure_time
+                    ))
+                )
+                .fetch_all(&db_pool)
+                .await?
+                .iter()
+                .map(|rec| rec.id)
+                .collect();
+
+                kandydate.append(&mut query);
             }
-            node_edges_id.insert((*(*node)).id, edges);
+
+            // get candidate edges ???
+            // println!("id: {}\n{:?}", id, kandydate);
+            node_edges_id.insert((*id as usize), kandydate);
         }
 
         // fill edges of the current id by node's address
-        for (node_id, edge_ids) in node_edges_id {
+        for (node_id, edge_ids) in node_edges_id { // NODE_ID RETURNS MEMORY ADDRESS
             let node = *(nodes.get(&node_id).expect("Boom"));
             let departure_time = &(*node).departure_time;
             let arrival_time = &(*node).arrival_time;
@@ -119,7 +135,9 @@ impl Graph {
                     .edges
                     .insert(NonNull::new_unchecked(*edge), travel_duration);
             }
+            println!("{}:\n{:?}", node_id, (*node).edges);
         }
+
 
         Ok(Self { nodes })
     }
