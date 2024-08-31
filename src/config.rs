@@ -36,7 +36,7 @@ impl ServerConfig {
 
     pub fn config(&self, cfg: &mut ServiceConfig) {
         cfg.app_data(self.db_pool.clone());
-        cfg.route("/", web::get().to(|| HttpResponse::Ok()))
+        cfg.route("/", web::get().to(HttpResponse::Ok))
             .service(
                 web::scope("/v1")
                     .service(

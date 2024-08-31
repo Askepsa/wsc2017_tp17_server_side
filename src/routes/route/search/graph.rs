@@ -1,7 +1,6 @@
 use actix_web::web::{self, BufMut};
 use chrono::NaiveTime;
 use sqlx::{query, query_as, PgPool};
-use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::ptr::NonNull;
 use std::str::FromStr;
@@ -45,6 +44,7 @@ pub struct Graph {
 }
 
 impl Graph {
+    // refactor
     pub async unsafe fn new(db_pool: PgPool) -> Result<Self, sqlx::Error> {
         // For each query, create new nodes and add it to nodes vector
         let mut nodes: HashMap<usize, *mut Node> = HashMap::new(); // make value a pointer of node
@@ -118,13 +118,12 @@ impl Graph {
                 kandydate.append(&mut query);
             }
 
-            // get candidate edges ???
-            // println!("id: {}\n{:?}", id, kandydate);
-            node_edges_id.insert((*id as usize), kandydate);
+            node_edges_id.insert(*id, kandydate);
         }
 
         // fill edges of the current id by node's address
-        for (node_id, edge_ids) in node_edges_id { // NODE_ID RETURNS MEMORY ADDRESS
+        for (node_id, edge_ids) in node_edges_id {
+            // NODE_ID RETURNS MEMORY ADDRESS
             let node = *(nodes.get(&node_id).expect("Boom"));
             let departure_time = &(*node).departure_time;
             let arrival_time = &(*node).arrival_time;
@@ -135,9 +134,7 @@ impl Graph {
                     .edges
                     .insert(NonNull::new_unchecked(*edge), travel_duration);
             }
-            println!("{}:\n{:?}", node_id, (*node).edges);
         }
-
 
         Ok(Self { nodes })
     }
@@ -147,7 +144,6 @@ fn calculate_travel_duration(departure_time: &str, arrival_time: &str) -> usize 
     let parse_time = |time: &str| -> usize {
         time.split(':')
             .take(2)
-            .into_iter()
             .flat_map(|s| s.chars())
             .collect::<String>()
             .parse::<usize>()
