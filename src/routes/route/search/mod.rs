@@ -36,7 +36,7 @@ pub async fn shortest_paths(
     // }
 
     unsafe {
-        let graph = Graph::new(db_pool.pool.clone())
+        let graph = Graph::new(db_pool.pool.clone(), &slug.departure_time)
             .await
             .expect("Sumabog ang paggawa ng graph");
     }

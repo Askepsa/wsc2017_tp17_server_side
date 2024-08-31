@@ -45,11 +45,17 @@ pub struct Graph {
 
 impl Graph {
     // refactor
-    pub async unsafe fn new(db_pool: PgPool) -> Result<Self, sqlx::Error> {
+    pub async unsafe fn new(db_pool: PgPool, departure_time: &str) -> Result<Self, sqlx::Error> {
         // For each query, create new nodes and add it to nodes vector
         let mut nodes: HashMap<usize, *mut Node> = HashMap::new(); // make value a pointer of node
         let queries = query!(
-            "SELECT id, from_place_id, to_place_id, departure_time, arrival_time FROM schedules;",
+            "SELECT id, from_place_id, to_place_id, departure_time, arrival_time 
+             FROM schedules 
+             WHERE departure_time >= $1;",
+            NaiveTime::from_str(departure_time).expect(&format!(
+                "Sumabog ang conversion ng oras {}",
+                departure_time
+            ))
         )
         .fetch_all(&db_pool)
         .await?;
@@ -123,7 +129,6 @@ impl Graph {
 
         // fill edges of the current id by node's address
         for (node_id, edge_ids) in node_edges_id {
-            // NODE_ID RETURNS MEMORY ADDRESS
             let node = *(nodes.get(&node_id).expect("Boom"));
             let departure_time = &(*node).departure_time;
             let arrival_time = &(*node).arrival_time;
