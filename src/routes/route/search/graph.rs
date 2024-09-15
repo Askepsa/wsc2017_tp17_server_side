@@ -1,20 +1,40 @@
-use actix_web::web::{self, BufMut};
 use chrono::NaiveTime;
-use sqlx::{query, query_as, PgPool};
+use sqlx::{query, PgPool};
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::ptr::NonNull;
 use std::str::FromStr;
 
 #[derive(Debug)]
 pub struct Node {
-    id: usize,
-    from_place_id: usize,
-    to_place_id: usize,
-    departure_time: String,
-    arrival_time: String,
-    prev_node: Option<NonNull<Node>>,
-    edges: HashMap<NonNull<Node>, usize>,
-    weight: Option<usize>,
+    pub id: usize,
+    pub from_place_id: usize,
+    pub to_place_id: usize,
+    pub departure_time: String,
+    pub arrival_time: String,
+    pub prev_node: Option<NonNull<Node>>,
+    pub edges: HashMap<NonNull<Node>, usize>,
+    pub weight: Option<usize>,
+}
+
+impl PartialEq for Node {
+    fn eq(&self, other: &Self) -> bool {
+        self.weight == other.weight
+    }
+}
+
+impl Eq for Node {}
+
+impl PartialOrd for Node {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.weight.partial_cmp(&other.weight)
+    }
+}
+
+impl Ord for Node {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.weight.cmp(&other.weight)
+    }
 }
 
 impl Node {
@@ -36,18 +56,23 @@ impl Node {
             weight: None,
         }
     }
+
+    pub fn travel_duration(&self) -> usize {
+        calculate_travel_duration(&self.departure_time, &self.arrival_time)
+    }
 }
 
 // Create graph and nodes
+#[derive(Debug)]
 pub struct Graph {
-    nodes: HashMap<usize, *mut Node>,
+    pub nodes: HashMap<usize, *mut Node>,
 }
 
 impl Graph {
     // refactor
     pub async unsafe fn new(db_pool: PgPool, departure_time: &str) -> Result<Self, sqlx::Error> {
         // For each query, create new nodes and add it to nodes vector
-        let mut nodes: HashMap<usize, *mut Node> = HashMap::new(); // make value a pointer of node
+        let mut nodes: HashMap<usize, *mut Node> = HashMap::new();
         let queries = query!(
             "SELECT id, from_place_id, to_place_id, departure_time, arrival_time 
              FROM schedules 
@@ -61,7 +86,7 @@ impl Graph {
         .await?;
         for query in queries {
             // DO CLEANUP
-            let mut new_node = Box::into_raw(Box::new(Node::new(
+            let new_node = Box::into_raw(Box::new(Node::new(
                 query.id as usize,
                 query.from_place_id as usize,
                 query.to_place_id as usize,
