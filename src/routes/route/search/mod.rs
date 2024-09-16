@@ -1,19 +1,20 @@
 use crate::routes::{place::Place, DatabasePool};
 use actix_web::{web, HttpResponse, Responder};
 use chrono::NaiveTime;
-use graph::{Graph, Node};
+use graph::{calculate_travel_duration, Graph, Node};
 use serde::{Deserialize, Serialize};
 use std::{
     cmp::Reverse,
     collections::{BinaryHeap, HashSet},
     ptr::NonNull,
+    usize,
 };
 
 pub mod graph;
 
 #[derive(Serialize)]
 struct ShortestPaths {
-    paths: HashSet<Vec<usize>>,
+    paths: Vec<Vec<usize>>,
 }
 
 pub async fn shortest_paths(
@@ -41,8 +42,12 @@ pub async fn shortest_paths(
             .await
             .expect("Sumabog ang paggawa ng graph");
 
-        if let Some(paths) = get_shortest_paths(slug.from_place_id, slug.to_place_id, &mut graph) {
-            println!("{:?}", paths);
+        if let Some(paths) = get_shortest_paths(
+            slug.from_place_id,
+            slug.to_place_id,
+            &slug.departure_time,
+            &mut graph,
+        ) {
             return HttpResponse::Ok().json(ShortestPaths { paths });
         }
     }
@@ -79,8 +84,9 @@ pub struct Res {
 unsafe fn get_shortest_paths(
     origin_place_id: i32,
     destination_place_id: i32,
+    departure_time: &str,
     graph: &mut Graph,
-) -> Option<HashSet<Vec<usize>>> {
+) -> Option<Vec<Vec<usize>>> {
     if graph.nodes.is_empty() {
         return None;
     }
@@ -90,7 +96,7 @@ unsafe fn get_shortest_paths(
     let start_node_key = start_keys.first()?;
 
     // perform dijsktra's algorithm
-    dijkstra(*start_node_key, graph);
+    dijkstra(*start_node_key, departure_time, graph);
 
     // get shortest paths by backtracking
     let mut shortest_paths_id: HashSet<Vec<usize>> = HashSet::new();
@@ -102,7 +108,7 @@ unsafe fn get_shortest_paths(
         }
     }
 
-    let mut five_shortest_paths = shortest_paths_id
+    let mut shortest_paths = shortest_paths_id
         .iter()
         .enumerate()
         .map(|(ind, vec)| {
@@ -114,16 +120,28 @@ unsafe fn get_shortest_paths(
         })
         .collect::<Vec<(usize, usize)>>();
 
-    five_shortest_paths.sort_by_key(|&(_, travel_duration)| travel_duration);
+    shortest_paths.sort_by_key(|&(_, travel_duration)| travel_duration);
 
-    let mut res = HashSet::new();
-    for (f_ind, _) in five_shortest_paths.iter().enumerate() {
+    let mut res = Vec::new();
+    let mut counter = 20;
+    for (f_ind, _) in shortest_paths.iter() {
+        if counter == 0 {
+            break;
+        }
         for (s_ind, vec) in shortest_paths_id.iter().enumerate() {
-            if f_ind == s_ind {
-                res.insert(vec.clone());
+            if counter == 0 {
+                break;
+            }
+            if *f_ind == s_ind {
+                res.push(vec.clone());
+                counter -= 1;
             }
         }
     }
+
+    // include estimated travel time
+    res.sort();
+    println!("{:#?}", res);
 
     Some(res)
 }
@@ -154,11 +172,16 @@ unsafe fn get_shortest_path(dest_key_id: usize, start_node_id: usize, graph: &Gr
 }
 
 // ACCOUNT FOR START_TIME
-unsafe fn dijkstra(start_node_key: usize, graph: &mut Graph) {
+unsafe fn dijkstra(start_node_key: usize, departure_time: &str, graph: &mut Graph) {
     let mut visited_nodes: HashSet<*mut Node> = HashSet::new();
     let mut prio_queue: BinaryHeap<Reverse<*mut Node>> = BinaryHeap::new();
 
-    prio_queue.push(Reverse(graph.nodes[&start_node_key]));
+    let start_node = &graph.nodes[&start_node_key];
+    (*(*start_node)).weight = Some(calculate_travel_duration(
+        departure_time,
+        &(*(*start_node)).arrival_time,
+    ));
+    prio_queue.push(Reverse(*start_node));
 
     while let Some(node) = prio_queue.pop() {
         let node = node.0;
@@ -179,9 +202,9 @@ unsafe fn dijkstra(start_node_key: usize, graph: &mut Graph) {
 
             // update edge's weight
             // check edge's weight
-            let edge_weight = (*edge).weight;
-            if edge_weight.is_none() || *travel_cost <= edge_weight.unwrap_or(0) {
-                (*edge).weight = Some(*travel_cost);
+            let edge_weight = (*edge).weight.unwrap_or(0);
+            if (*edge).weight.is_none() || *travel_cost <= edge_weight {
+                (*edge).weight = Some(*travel_cost + edge_weight);
                 (*edge).prev_node = Some(NonNull::new_unchecked(node));
             }
         }

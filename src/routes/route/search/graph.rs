@@ -170,7 +170,7 @@ impl Graph {
     }
 }
 
-fn calculate_travel_duration(departure_time: &str, arrival_time: &str) -> usize {
+pub fn calculate_travel_duration(departure_time: &str, arrival_time: &str) -> usize {
     let parse_time = |time: &str| -> usize {
         time.split(':')
             .take(2)

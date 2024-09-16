@@ -36,27 +36,26 @@ impl ServerConfig {
 
     pub fn config(&self, cfg: &mut ServiceConfig) {
         cfg.app_data(self.db_pool.clone());
-        cfg.route("/", web::get().to(HttpResponse::Ok))
-            .service(
-                web::scope("/v1")
-                    .service(
-                        web::scope("/auth")
-                            .route("/login", web::post().to(login))
-                            .route("/logout", web::get().to(logout)),
-                    )
-                    .service(
-                        web::resource("/place/{id}")
-                            .get(find_place)
-                            .delete(delete_place),
-                    )
-                    .route("/place", web::get().to(get_places))
-                    .service(
-                        web::scope("/route").service(
-                            web::resource("/search/{from_place_id}/{to_place_id}/{departure_time}")
-                                .get(shortest_paths),
-                        ),
+        cfg.route("/", web::get().to(HttpResponse::Ok)).service(
+            web::scope("/v1")
+                .service(
+                    web::scope("/auth")
+                        .route("/login", web::post().to(login))
+                        .route("/logout", web::get().to(logout)),
+                )
+                .service(
+                    web::resource("/place/{id}")
+                        .get(find_place)
+                        .delete(delete_place),
+                )
+                .route("/place", web::get().to(get_places))
+                .service(
+                    web::scope("/route").service(
+                        web::resource("/search/{from_place_id}/{to_place_id}/{departure_time}")
+                            .get(shortest_paths),
                     ),
-            );
+                ),
+        );
     }
 }
 
