@@ -102,8 +102,11 @@ unsafe fn get_shortest_paths(
         .map(|(ind, vec)| {
             (
                 ind,
-                vec.iter()
-                    .fold(0, |acc, n| acc + (*graph.nodes[n]).travel_duration()),
+                vec.iter().fold(0, |acc, n| {
+                    acc + (*graph.nodes[n])
+                        .travel_duration()
+                        .expect("time conversion explodes")
+                }),
             )
         })
         .collect::<Vec<(usize, usize)>>();
@@ -165,10 +168,10 @@ unsafe fn dijkstra(start_node_key: usize, departure_time: &str, graph: &mut Grap
     let mut prio_queue: BinaryHeap<Reverse<*mut Node>> = BinaryHeap::new();
 
     let start_node = &graph.nodes[&start_node_key];
-    (*(*start_node)).weight = Some(calculate_travel_duration(
-        departure_time,
-        &(*(*start_node)).arrival_time,
-    ));
+    (*(*start_node)).weight = Some(
+        calculate_travel_duration(departure_time, &(*(*start_node)).arrival_time)
+            .expect("time conversion explodes"),
+    );
     prio_queue.push(Reverse(*start_node));
 
     while let Some(node) = prio_queue.pop() {
