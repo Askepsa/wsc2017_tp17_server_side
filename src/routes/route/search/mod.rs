@@ -19,40 +19,28 @@ struct ShortestPaths {
 
 pub async fn shortest_paths(
     slug: web::Path<Slug>,
-    // query: web::Query<SessionToken>,
     db_pool: web::Data<DatabasePool>,
 ) -> impl Responder {
-    // if let Err(err) = validate_session_token(&query.token, &db_pool.pool).await {
-    //     match err {
-    //         sqlx::Error::RowNotFound => {
-    //             return HttpResponse::Unauthorized().json(RouteRes {
-    //                 msg: "unauthorized user".to_string(),
-    //             })
-    //         }
-    //         _ => {
-    //             return HttpResponse::InternalServerError().json(RouteRes {
-    //                 msg: "server err".to_string(),
-    //             })
-    //         }
-    //     }
-    // }
+    let mut graph = unsafe {
+        match Graph::new(db_pool.pool.clone(), &slug.departure_time).await {
+            Ok(graph) => graph,
+            Err(_) => return HttpResponse::BadRequest().json("invalid req"),
+        }
+    };
 
-    unsafe {
-        let mut graph = Graph::new(db_pool.pool.clone(), &slug.departure_time)
-            .await
-            .expect("Sumabog ang paggawa ng graph");
-
-        if let Some(paths) = get_shortest_paths(
+    let paths = unsafe {
+        get_shortest_paths(
             slug.from_place_id,
             slug.to_place_id,
             &slug.departure_time,
             &mut graph,
-        ) {
-            return HttpResponse::Ok().json(ShortestPaths { paths });
-        }
-    }
+        )
+    };
 
-    HttpResponse::Ok().json("haha wala")
+    match paths {
+        Some(paths) => HttpResponse::Ok().json(ShortestPaths { paths }),
+        None => HttpResponse::BadRequest().json("haha wala"),
+    }
 }
 
 #[derive(Deserialize)]
@@ -171,7 +159,7 @@ unsafe fn get_shortest_path(dest_key_id: usize, start_node_id: usize, graph: &Gr
     path
 }
 
-// ACCOUNT FOR START_TIME
+// Mali ang implementation lol
 unsafe fn dijkstra(start_node_key: usize, departure_time: &str, graph: &mut Graph) {
     let mut visited_nodes: HashSet<*mut Node> = HashSet::new();
     let mut prio_queue: BinaryHeap<Reverse<*mut Node>> = BinaryHeap::new();

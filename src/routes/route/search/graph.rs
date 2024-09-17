@@ -68,8 +68,8 @@ pub struct Graph {
     pub nodes: HashMap<usize, *mut Node>,
 }
 
+// REFACTOR
 impl Graph {
-    // refactor
     pub async unsafe fn new(db_pool: PgPool, departure_time: &str) -> Result<Self, sqlx::Error> {
         // For each query, create new nodes and add it to nodes vector
         let mut nodes: HashMap<usize, *mut Node> = HashMap::new();
