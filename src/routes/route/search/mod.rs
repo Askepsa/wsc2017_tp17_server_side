@@ -24,7 +24,7 @@ pub async fn shortest_paths(
     let mut graph = unsafe {
         match Graph::new(db_pool.pool.clone(), &slug.departure_time).await {
             Ok(graph) => graph,
-            Err(_) => return HttpResponse::BadRequest().json("invalid req"),
+            Err(_) => return HttpResponse::BadRequest().json("invalid request"),
         }
     };
 
@@ -39,7 +39,7 @@ pub async fn shortest_paths(
 
     match paths {
         Some(paths) => HttpResponse::Ok().json(ShortestPaths { paths }),
-        None => HttpResponse::BadRequest().json("haha wala"),
+        None => HttpResponse::NotFound().json("haha wala"),
     }
 }
 
