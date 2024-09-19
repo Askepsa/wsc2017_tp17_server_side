@@ -6,6 +6,11 @@ use std::collections::HashMap;
 use std::ptr::NonNull;
 use std::str::FromStr;
 
+type SchedId = usize;
+type ToPlaceId = usize;
+type Weight = usize;
+type NodeMap = HashMap<SchedId, *mut Node>;
+
 #[derive(Debug)]
 pub struct Node {
     pub id: usize,
@@ -14,7 +19,7 @@ pub struct Node {
     pub departure_time: String,
     pub arrival_time: String,
     pub prev_node: Option<NonNull<Node>>,
-    pub edges: HashMap<NonNull<Node>, usize>,
+    pub edges: HashMap<NonNull<Node>, Weight>,
     pub weight: Option<usize>,
 }
 
@@ -63,87 +68,112 @@ impl Node {
     }
 }
 
-// Create graph and nodes
 #[derive(Debug)]
 pub struct Graph {
-    pub nodes: HashMap<usize, *mut Node>,
+    pub nodes: NodeMap,
 }
 
-// REFACTOR
 impl Graph {
     pub async unsafe fn new(db_pool: PgPool, departure_time: &str) -> Result<Self> {
-        // For each query, create new nodes and add it to nodes vector
-        let nodes: HashMap<usize, *mut Node> = init_nodes(db_pool.clone(), departure_time).await?;
-
-        // Fill edges of nodes
-        // Get edges of node id
-        let mut node_edges_id: HashMap<usize, Vec<i32>> = HashMap::new();
-        for (id, node) in nodes.iter() {
-            // query appropriate time
-            // fill node according to appropriate schedule id
-            let departure_time = &(*(*node)).departure_time;
-            let edge_candidate_stations_id = query!(
-                "SELECT id, to_place_id 
-                 FROM schedules 
-                 WHERE from_place_id = $1 
-                 AND departure_time >= $2;",
-                (*(*node)).from_place_id as i32,
-                NaiveTime::from_str(departure_time)?
-            )
-            .fetch_all(&db_pool)
-            .await?
-            .iter()
-            .map(|rec| (rec.id, rec.to_place_id))
-            .collect::<Vec<(i32, i32)>>();
-
-            let mut kandydate = Vec::new();
-            for (sched_origin_id, edge_to_place_id) in edge_candidate_stations_id {
-                let mut query: Vec<i32> = query!(
-                    "SELECT id from schedules 
-                     WHERE id = $1 AND from_place_id = $2 AND departure_time >= $3;",
-                    sched_origin_id + 1,
-                    edge_to_place_id,
-                    NaiveTime::from_str(departure_time)?
-                )
-                .fetch_all(&db_pool)
-                .await?
-                .iter()
-                .map(|rec| rec.id)
-                .collect();
-
-                kandydate.append(&mut query);
-            }
-
-            node_edges_id.insert(*id, kandydate);
-        }
-
-        // fill edges of the current id by node's address
-        for (node_id, edge_ids) in node_edges_id {
-            let node = *(nodes.get(&node_id).ok_or(anyhow!("Boom"))?);
-            let departure_time = &(*node).departure_time;
-            let arrival_time = &(*node).arrival_time;
-            for edge_id in edge_ids {
-                let edge = nodes.get(&(edge_id as usize)).ok_or(anyhow!("Kaboom"))?;
-                let travel_duration = calculate_travel_duration(departure_time, arrival_time)?;
-                (*node)
-                    .edges
-                    .insert(NonNull::new_unchecked(*edge), travel_duration);
-            }
-        }
-
+        let mut nodes: NodeMap = init_nodes(db_pool.clone(), departure_time).await?;
+        connect_edges(db_pool, &mut nodes, departure_time).await?;
         Ok(Self { nodes })
     }
 }
 
-async unsafe fn init_nodes(
+impl Drop for Graph {
+    fn drop(&mut self) {
+        for (_, node) in self.nodes.iter() {
+            unsafe {
+                let _ = Box::from_raw(*node);
+            }
+        }
+    }
+}
+
+async unsafe fn get_node_edges(
     db_pool: PgPool,
     departure_time: &str,
-) -> Result<HashMap<usize, *mut Node>> {
-    let mut nodes: HashMap<usize, *mut Node> = HashMap::new();
+    node: &*mut Node,
+) -> Result<Vec<SchedId>> {
+    let departure_time = NaiveTime::from_str(departure_time)?;
+    let from_place_sched_id = (*(*node)).from_place_id;
+    let sched_destinations: Vec<(SchedId, ToPlaceId)> = query!(
+        "SELECT id, to_place_id 
+         FROM schedules 
+         WHERE 
+         from_place_id = $1 AND departure_time >= $2;",
+        from_place_sched_id as i32,
+        departure_time
+    )
+    .fetch_all(&db_pool.clone())
+    .await?
+    .into_iter()
+    .map(|n| (n.id as usize, n.to_place_id as usize))
+    .collect();
+
+    let mut edges: Vec<SchedId> = Vec::new();
+    for (sched_id, to_place_id) in sched_destinations.into_iter() {
+        let query = query!(
+            "SELECT id 
+             FROM schedules 
+             WHERE id = $1 
+             AND from_place_id = $2 
+             AND departure_time >= $3;",
+            (sched_id + 1) as i32,
+            (to_place_id) as i32,
+            departure_time
+        )
+        .fetch_all(&db_pool)
+        .await?
+        .into_iter()
+        .map(|record| record.id as usize)
+        .collect::<Vec<usize>>();
+
+        edges.extend(query.into_iter());
+    }
+
+    Ok(edges)
+}
+
+async unsafe fn connect_edges(
+    db_pool: PgPool,
+    nodes: &mut NodeMap,
+    departure_time: &str,
+) -> Result<()> {
+    for (_, &node) in nodes.iter() {
+        let edges = get_node_edges(db_pool.clone(), departure_time, &node).await?;
+        let edges = calc_edges_weight(&edges, nodes).await?;
+        (*node).edges = edges;
+    }
+
+    Ok(())
+}
+
+async unsafe fn calc_edges_weight(
+    edges: &Vec<SchedId>,
+    nodes: &NodeMap,
+) -> Result<HashMap<NonNull<Node>, Weight>> {
+    let mut node_edges = HashMap::new();
+    for sched_id in edges {
+        let node = *nodes.get(sched_id).ok_or(anyhow!("Unable to find node"))?;
+        let departure_time = &(*node).departure_time;
+        let arrival_time = &(*node).arrival_time;
+        let travel_duration = calculate_travel_duration(departure_time, arrival_time)?;
+        let node = NonNull::new_unchecked(node);
+
+        node_edges.insert(node, travel_duration);
+    }
+
+    Ok(node_edges)
+}
+
+async unsafe fn init_nodes(db_pool: PgPool, departure_time: &str) -> Result<NodeMap> {
+    let mut nodes = HashMap::new();
     let queries = query!(
         "SELECT id, from_place_id, to_place_id, departure_time, arrival_time 
-             FROM schedules 
-             WHERE departure_time >= $1;",
+         FROM schedules 
+         WHERE departure_time >= $1;",
         NaiveTime::from_str(departure_time)?
     )
     .fetch_all(&db_pool)
