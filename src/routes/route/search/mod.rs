@@ -1,21 +1,13 @@
+// #![allow(unused)]
 use crate::routes::{place::Place, DatabasePool};
 use actix_web::{web, HttpResponse, Responder};
+use anyhow::{anyhow, Result};
 use chrono::NaiveTime;
-use graph::{calculate_travel_duration, Graph, Node};
+use graph::{parse_time, Graph, Node};
 use serde::{Deserialize, Serialize};
-use std::{
-    cmp::Reverse,
-    collections::{BinaryHeap, HashSet},
-    ptr::NonNull,
-    usize,
-};
+use std::{cmp::Reverse, collections::BinaryHeap, ptr::NonNull};
 
 pub mod graph;
-
-#[derive(Serialize)]
-struct ShortestPaths {
-    paths: Vec<Vec<usize>>,
-}
 
 pub async fn shortest_paths(
     slug: web::Path<Slug>,
@@ -29,7 +21,7 @@ pub async fn shortest_paths(
     };
 
     let paths = unsafe {
-        get_shortest_paths(
+        calculate_shortest_paths(
             slug.from_place_id,
             slug.to_place_id,
             &slug.departure_time,
@@ -38,8 +30,11 @@ pub async fn shortest_paths(
     };
 
     match paths {
-        Some(paths) => HttpResponse::Ok().json(ShortestPaths { paths }),
-        None => HttpResponse::NotFound().json("haha wala"),
+        Ok(paths) => match paths {
+            Some(paths) => return HttpResponse::Ok().json(ShortestPaths { paths }),
+            _ => HttpResponse::NotFound().json("haha wala"),
+        },
+        _ => HttpResponse::InternalServerError().json("sumabog ang server"),
     }
 }
 
@@ -68,152 +63,129 @@ pub struct Res {
     schedules: Vec<ResponseSchedule>,
 }
 
-// get shortest path
-unsafe fn get_shortest_paths(
+#[derive(Serialize)]
+struct ShortestPaths {
+    paths: Vec<(Vec<usize>, usize)>,
+}
+
+unsafe fn calculate_shortest_paths(
     origin_place_id: i32,
     destination_place_id: i32,
     departure_time: &str,
     graph: &mut Graph,
-) -> Option<Vec<Vec<usize>>> {
-    if graph.nodes.is_empty() {
+) -> Result<Option<Vec<(Vec<usize>, usize)>>> {
+    let starting_points =
+        find_from_place_sched_ids(origin_place_id as usize, departure_time, graph);
+    let dest_points =
+        find_from_place_sched_ids(destination_place_id as usize, departure_time, graph);
+    println!("{:?}", dest_points);
+    dijkstra(departure_time, graph)?;
+    Ok(collect_shortest_paths(starting_points, dest_points, graph))
+}
+
+unsafe fn collect_shortest_paths(
+    starting_points: Vec<usize>,
+    dest_points: Vec<usize>,
+    graph: &Graph,
+) -> Option<Vec<(Vec<usize>, usize)>> {
+    let mut sorted_dest_place_ids: Vec<(usize, usize)> = dest_points
+        .into_iter()
+        .filter_map(|dest_id| {
+            let weight = (*graph.nodes[&dest_id]).weight;
+            weight.map(|w| (dest_id, w))
+        })
+        .collect();
+    sorted_dest_place_ids.sort_by_key(|(_, weight)| *weight);
+
+    let shortest_paths: Vec<(Vec<usize>, usize)> =
+        sorted_dest_place_ids
+            .into_iter()
+            .fold(Vec::new(), |mut acc, (id, weight)| {
+                let mut shortest_path = Vec::new();
+                let goal_node = graph.nodes[&id];
+                let mut prev_node = (*goal_node).prev_node;
+                shortest_path.push(id);
+                while let Some(node) = prev_node {
+                    let sched_id = (*node.as_ptr()).id;
+                    shortest_path.push(sched_id);
+                    prev_node = (*node.as_ptr()).prev_node;
+                    if starting_points.contains(&sched_id) {
+                        break;
+                    }
+                }
+                shortest_path.reverse();
+                if !shortest_path.is_empty() {
+                    acc.push((shortest_path, weight));
+                }
+
+                acc
+            });
+
+    if shortest_paths.is_empty() {
         return None;
     }
 
-    // get starting points
-    let start_keys = get_node_keys(origin_place_id as usize, graph);
-    let start_node_key = start_keys.first()?;
-
-    // perform dijsktra's algorithm
-    dijkstra(*start_node_key, departure_time, graph);
-
-    // get shortest paths by backtracking
-    let mut shortest_paths_id: HashSet<Vec<usize>> = HashSet::new();
-    let dest_keys = get_node_keys(destination_place_id as usize, graph);
-    for start_key in start_keys.iter() {
-        for dest_key in dest_keys.iter() {
-            // println!("{start_key}: {dest_key}");
-            shortest_paths_id.insert(get_shortest_path(*dest_key, *start_key, graph));
-        }
-    }
-
-    let mut shortest_paths = shortest_paths_id
-        .iter()
-        .enumerate()
-        .map(|(ind, vec)| {
-            (
-                ind,
-                vec.iter().fold(0, |acc, n| {
-                    acc + (*graph.nodes[n])
-                        .travel_duration()
-                        .expect("time conversion explodes")
-                }),
-            )
-        })
-        .collect::<Vec<(usize, usize)>>();
-
-    shortest_paths.sort_by_key(|&(_, travel_duration)| travel_duration);
-
-    let mut res = Vec::new();
-    let mut counter = 20;
-    for (f_ind, _) in shortest_paths.iter() {
-        if counter == 0 {
-            break;
-        }
-        for (s_ind, vec) in shortest_paths_id.iter().enumerate() {
-            if counter == 0 {
-                break;
-            }
-            if *f_ind == s_ind {
-                res.push(vec.clone());
-                counter -= 1;
-            }
-        }
-    }
-
-    // include estimated travel time
-    res.sort();
-    println!("{:#?}", res);
-
-    Some(res)
+    Some(shortest_paths)
 }
 
-// backtrack
-unsafe fn get_shortest_path(dest_key_id: usize, start_node_id: usize, graph: &Graph) -> Vec<usize> {
-    let mut path = Vec::new();
-    let mut cur_node = graph.nodes.get(&dest_key_id);
-
-    while let Some(node_ref) = cur_node {
-        let node = &*node_ref;
-        if let Some(prev_node_ptr) = (*(*node)).prev_node {
-            let prev_node = &*prev_node_ptr.as_ptr();
-            path.push(prev_node.id);
-
-            if prev_node.id == start_node_id {
-                break;
-            }
-
-            cur_node = graph.nodes.get(&prev_node.id);
-        } else {
-            break;
-        }
-    }
-
-    path.reverse();
-    path
-}
-
-// Mali ang implementation lol
-unsafe fn dijkstra(start_node_key: usize, departure_time: &str, graph: &mut Graph) {
-    let mut visited_nodes: HashSet<*mut Node> = HashSet::new();
-    let mut prio_queue: BinaryHeap<Reverse<*mut Node>> = BinaryHeap::new();
-
-    let start_node = &graph.nodes[&start_node_key];
-    (*(*start_node)).weight = Some(
-        calculate_travel_duration(departure_time, &(*(*start_node)).arrival_time)
-            .expect("time conversion explodes"),
-    );
-    prio_queue.push(Reverse(*start_node));
-
-    while let Some(node) = prio_queue.pop() {
-        let node = node.0;
-        if visited_nodes.contains(&node) {
-            continue;
-        }
-
-        visited_nodes.insert(node);
-
-        // push node's edges to prio queue
-        for (edge, travel_cost) in (*node).edges.iter_mut() {
-            let edge = edge.as_ptr();
-            if visited_nodes.contains(&edge) {
-                continue;
-            }
-
-            prio_queue.push(Reverse(edge));
-
-            // update edge's weight
-            // check edge's weight
-            let edge_weight = (*edge).weight.unwrap_or(0);
-            if (*edge).weight.is_none() || *travel_cost <= edge_weight {
-                (*edge).weight = Some(*travel_cost + edge_weight);
-                (*edge).prev_node = Some(NonNull::new_unchecked(node));
-            }
-        }
-    }
-}
-
-unsafe fn get_node_keys(origin_place_id: usize, graph: &Graph) -> Vec<usize> {
-    let mut ids = graph
+unsafe fn find_from_place_sched_ids(
+    origin_place_id: usize,
+    departure_time: &str,
+    graph: &mut Graph,
+) -> Vec<usize> {
+    let starting_points = graph
         .nodes
         .iter()
-        .filter_map(|(&k, &v)| {
-            if (*v).from_place_id == origin_place_id {
-                Some(k)
+        .map(|(&sched_id, &node)| -> Result<usize> {
+            let node_from_place_id = (*node).from_place_id;
+            let node_dep_time = parse_time(&(*node).departure_time)?;
+            let departure_time = parse_time(departure_time)?;
+            if node_dep_time >= departure_time && origin_place_id == node_from_place_id {
+                Ok(sched_id)
             } else {
-                None
+                Err(anyhow!("wala kang nakita"))
             }
-        })
-        .collect::<Vec<usize>>();
-    ids.sort();
-    ids
+        });
+
+    starting_points.filter_map(|res| res.ok()).collect()
+}
+
+unsafe fn dijkstra(departure_time: &str, graph: &mut Graph) -> Result<()> {
+    let nodes = &mut graph.nodes;
+    let min_node_sched_id = match nodes.keys().copied().min() {
+        Some(sched_id) => sched_id,
+        None => return Ok(()),
+    };
+
+    let first_to_visit_node = nodes[&min_node_sched_id];
+    let first_to_visit_node_dep_time = &(*first_to_visit_node).departure_time;
+    (*first_to_visit_node).weight =
+        Some(parse_time(first_to_visit_node_dep_time)? - parse_time(departure_time)?);
+
+    let mut binary_heap: BinaryHeap<Reverse<*mut Node>> = BinaryHeap::new();
+    binary_heap.push(Reverse(first_to_visit_node));
+
+    while let Some(node) = binary_heap.pop() {
+        let prev_node = node.0;
+        let prev_node_weight = match (*prev_node).weight {
+            Some(w) => w,
+            None => continue,
+        };
+
+        let edges = &(*prev_node).edges;
+        for (&edge, &cost) in edges {
+            let travel_weight = prev_node_weight + cost;
+            let edge = edge.as_ptr();
+            let edge_weight = (*edge).weight;
+            if edge_weight.map_or(true, |w| w > travel_weight) {
+                (*edge).weight = Some(travel_weight);
+                (*edge).prev_node = Some(NonNull::new_unchecked(prev_node));
+                if edge_weight.is_none() {
+                    binary_heap.push(Reverse(edge));
+                }
+            }
+        }
+    }
+
+    Ok(())
 }

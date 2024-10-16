@@ -62,10 +62,6 @@ impl Node {
             weight: None,
         }
     }
-
-    pub fn travel_duration(&self) -> Result<usize> {
-        calculate_travel_duration(&self.departure_time, &self.arrival_time)
-    }
 }
 
 #[derive(Debug)]
@@ -76,7 +72,7 @@ pub struct Graph {
 impl Graph {
     pub async unsafe fn new(db_pool: PgPool, departure_time: &str) -> Result<Self> {
         let mut nodes: NodeMap = init_nodes(db_pool.clone(), departure_time).await?;
-        connect_edges(db_pool, &mut nodes, departure_time).await?;
+        connect_edges(db_pool, &mut nodes).await?;
         Ok(Self { nodes })
     }
 }
@@ -91,20 +87,18 @@ impl Drop for Graph {
     }
 }
 
-async unsafe fn get_node_edges(
-    db_pool: PgPool,
-    departure_time: &str,
-    node: &*mut Node,
-) -> Result<Vec<SchedId>> {
-    let departure_time = NaiveTime::from_str(departure_time)?;
+async unsafe fn get_node_edges(db_pool: PgPool, node: &*mut Node) -> Result<Vec<SchedId>> {
+    let node_departure_time = NaiveTime::from_str(&(*(*node)).departure_time)?;
     let from_place_sched_id = (*(*node)).from_place_id;
     let sched_destinations: Vec<(SchedId, ToPlaceId)> = query!(
+        // the problem?
         "SELECT id, to_place_id 
          FROM schedules 
          WHERE 
          from_place_id = $1 AND departure_time >= $2;",
         from_place_sched_id as i32,
-        departure_time
+        node_departure_time,
+        // node_id
     )
     .fetch_all(&db_pool.clone())
     .await?
@@ -122,7 +116,7 @@ async unsafe fn get_node_edges(
              AND departure_time >= $3;",
             (sched_id + 1) as i32,
             (to_place_id) as i32,
-            departure_time
+            node_departure_time
         )
         .fetch_all(&db_pool)
         .await?
@@ -136,32 +130,28 @@ async unsafe fn get_node_edges(
     Ok(edges)
 }
 
-async unsafe fn connect_edges(
-    db_pool: PgPool,
-    nodes: &mut NodeMap,
-    departure_time: &str,
-) -> Result<()> {
+async unsafe fn connect_edges(db_pool: PgPool, nodes: &mut NodeMap) -> Result<()> {
     for (_, &node) in nodes.iter() {
-        let edges = get_node_edges(db_pool.clone(), departure_time, &node).await?;
-        let edges = calc_edges_weight(&edges, nodes).await?;
-        (*node).edges = edges;
+        let edges = get_node_edges(db_pool.clone(), &node).await?;
+        (*node).edges = calc_edges_weight(&node, &edges, nodes).await?;
     }
 
     Ok(())
 }
 
 async unsafe fn calc_edges_weight(
+    origin_node: &*mut Node,
     edges: &Vec<SchedId>,
     nodes: &NodeMap,
 ) -> Result<HashMap<NonNull<Node>, Weight>> {
     let mut node_edges = HashMap::new();
     for sched_id in edges {
         let node = *nodes.get(sched_id).ok_or(anyhow!("Unable to find node"))?;
-        let departure_time = &(*node).departure_time;
-        let arrival_time = &(*node).arrival_time;
-        let travel_duration = calculate_travel_duration(departure_time, arrival_time)?;
-        let node = NonNull::new_unchecked(node);
+        let arriv_time = &(*node).arrival_time;
+        let depart_time = &(*(*origin_node)).departure_time;
 
+        let travel_duration = calculate_travel_duration(depart_time, arriv_time)?;
+        let node = NonNull::new_unchecked(node);
         node_edges.insert(node, travel_duration);
     }
 
@@ -180,7 +170,6 @@ async unsafe fn init_nodes(db_pool: PgPool, departure_time: &str) -> Result<Node
     .await?;
 
     for query in queries {
-        // DO CLEANUP
         let new_node = Box::into_raw(Box::new(Node::new(
             query.id as usize,
             query.from_place_id as usize,
@@ -202,15 +191,15 @@ async unsafe fn init_nodes(db_pool: PgPool, departure_time: &str) -> Result<Node
     Ok(nodes)
 }
 
-pub fn calculate_travel_duration(departure_time: &str, arrival_time: &str) -> Result<usize> {
-    let parse_time = |time: &str| -> Result<usize> {
-        Ok(time
-            .split(':')
-            .take(2)
-            .flat_map(|s| s.chars())
-            .collect::<String>()
-            .parse::<usize>()?)
-    };
+pub fn parse_time(time: &str) -> Result<usize> {
+    Ok(time
+        .split(':')
+        .take(2)
+        .flat_map(|s| s.chars())
+        .collect::<String>()
+        .parse::<usize>()?)
+}
 
+fn calculate_travel_duration(departure_time: &str, arrival_time: &str) -> Result<usize> {
     Ok(parse_time(arrival_time)? - parse_time(departure_time)?)
 }
