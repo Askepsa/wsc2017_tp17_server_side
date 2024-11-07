@@ -72,7 +72,7 @@ pub struct Graph {
 impl Graph {
     pub async unsafe fn new(db_pool: PgPool, departure_time: &str) -> Result<Self> {
         let mut nodes: NodeMap = init_nodes(db_pool.clone(), departure_time).await?;
-        connect_edges(db_pool, &mut nodes).await?;
+        connect_edges(db_pool, departure_time, &mut nodes).await?;
         Ok(Self { nodes })
     }
 }
@@ -91,14 +91,12 @@ async unsafe fn get_node_edges(db_pool: PgPool, node: &*mut Node) -> Result<Vec<
     let node_departure_time = NaiveTime::from_str(&(*(*node)).departure_time)?;
     let from_place_sched_id = (*(*node)).from_place_id;
     let sched_destinations: Vec<(SchedId, ToPlaceId)> = query!(
-        // the problem?
         "SELECT id, to_place_id 
          FROM schedules 
          WHERE 
          from_place_id = $1 AND departure_time >= $2;",
         from_place_sched_id as i32,
         node_departure_time,
-        // node_id
     )
     .fetch_all(&db_pool.clone())
     .await?
@@ -130,29 +128,67 @@ async unsafe fn get_node_edges(db_pool: PgPool, node: &*mut Node) -> Result<Vec<
     Ok(edges)
 }
 
-async unsafe fn connect_edges(db_pool: PgPool, nodes: &mut NodeMap) -> Result<()> {
+async unsafe fn connect_edges(
+    db_pool: PgPool,
+    user_dep_time: &str,
+    nodes: &mut NodeMap,
+) -> Result<()> {
     for (_, &node) in nodes.iter() {
         let edges = get_node_edges(db_pool.clone(), &node).await?;
-        (*node).edges = calc_edges_weight(&node, &edges, nodes).await?;
+        (*node).edges =
+            calc_edges_weight(db_pool.clone(), user_dep_time, &node, &edges, nodes).await?;
     }
 
     Ok(())
 }
 
 async unsafe fn calc_edges_weight(
+    db_pool: PgPool,
+    user_dep_time: &str,
     origin_node: &*mut Node,
     edges: &Vec<SchedId>,
     nodes: &NodeMap,
 ) -> Result<HashMap<NonNull<Node>, Weight>> {
     let mut node_edges = HashMap::new();
     for sched_id in edges {
-        let node = *nodes.get(sched_id).ok_or(anyhow!("Unable to find node"))?;
-        let arriv_time = &(*node).arrival_time;
-        let depart_time = &(*(*origin_node)).departure_time;
+        let edge = *nodes.get(sched_id).ok_or(anyhow!("Unable to find node"))?;
+        let query = query!(
+            "SELECT arrival_time 
+             FROM schedules 
+             WHERE id = $1",
+            (sched_id - 1) as i32
+        )
+        .fetch_all(&db_pool)
+        .await?
+        .into_iter()
+        .map(|record| {
+            record
+                .arrival_time
+                .map_or(None, |rec| Some(rec.format("%H:%M:%S").to_string()))
+        })
+        .collect::<Vec<Option<String>>>();
 
-        let travel_duration = calculate_travel_duration(depart_time, arriv_time)?;
-        let node = NonNull::new_unchecked(node);
-        node_edges.insert(node, travel_duration);
+        let prev_edge_node_arr_time = {
+            query.first().map_or(None, |arr_time| {
+                arr_time.as_ref().map(|arr_time| arr_time.to_owned())
+            })
+        };
+
+        let cost = {
+            if let Some(arr_time) = prev_edge_node_arr_time {
+                calculate_travel_duration(user_dep_time, &arr_time)?
+            } else {
+                calculate_travel_duration(
+                    user_dep_time,
+                    &(*(*origin_node))
+                        .weight
+                        .expect("sumabog nanaman ulit ang server")
+                        .to_string(),
+                )?
+            }
+        };
+
+        node_edges.insert(NonNull::new_unchecked(edge), cost);
     }
 
     Ok(node_edges)

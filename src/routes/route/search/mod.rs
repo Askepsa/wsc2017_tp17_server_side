@@ -1,4 +1,3 @@
-// #![allow(unused)]
 use crate::routes::{place::Place, DatabasePool};
 use actix_web::{web, HttpResponse, Responder};
 use anyhow::{anyhow, Result};
@@ -68,6 +67,7 @@ struct ShortestPaths {
     paths: Vec<(Vec<usize>, usize)>,
 }
 
+// aysuin nalang to ig
 unsafe fn calculate_shortest_paths(
     origin_place_id: i32,
     destination_place_id: i32,
@@ -78,7 +78,6 @@ unsafe fn calculate_shortest_paths(
         find_from_place_sched_ids(origin_place_id as usize, departure_time, graph);
     let dest_points =
         find_from_place_sched_ids(destination_place_id as usize, departure_time, graph);
-    println!("{:?}", dest_points);
     dijkstra(departure_time, graph)?;
     Ok(collect_shortest_paths(starting_points, dest_points, graph))
 }
